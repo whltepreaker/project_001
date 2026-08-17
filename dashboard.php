@@ -1,5 +1,5 @@
 <?php
-// dashboard.php - Management dashboard for instructors to view typing activity
+// dashboard.php - Instructor management dashboard for analyzing user typing performance
 
 session_start();
 
@@ -26,46 +26,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         header('Location: dashboard.php');
         exit;
     } else {
-        $errorMsg = 'نام کاربری یا رمز عبور اشتباه است.';
+        $errorMsg = 'Invalid username or password.';
     }
 }
 
 $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
 ?>
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>داشبورد تحلیل عملکرد تایپیست‌ها</title>
+    <title>User Performance</title>
     <style>
         :root {
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --bg: #0f172a;
-            --card-bg: #1e293b;
-            --text: #f8fafc;
-            --muted: #94a3b8;
-            --border: #334155;
-            --badge-bg: #1e293b;
-            --accent: #10b981;
-            --autofill-color: #f59e0b;
-            --key-bg: #0f172a;
-            --key-border: #475569;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --bg: #0b0f19;
+            --card-bg: #111827;
+            --card-border: #1f2937;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --accent-green: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-blue: #60a5fa;
+            --code-bg: #030712;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
         body {
             background-color: var(--bg);
-            color: var(--text);
-            line-height: 1.6;
+            color: var(--text-main);
+            line-height: 1.5;
             padding: 24px;
+            min-height: 100vh;
         }
 
         .container {
@@ -78,97 +79,106 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             justify-content: space-between;
             align-items: center;
             background: var(--card-bg);
-            padding: 18px 28px;
+            padding: 20px 28px;
             border-radius: 12px;
-            border: 1px solid var(--border);
+            border: 1px solid var(--card-border);
             margin-bottom: 24px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
         }
 
         h1 {
-            font-size: 1.35rem;
-            color: var(--text);
+            font-size: 1.4rem;
+            color: var(--text-main);
             font-weight: 700;
+            letter-spacing: -0.025em;
         }
 
         .btn {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             padding: 8px 16px;
             background-color: var(--primary);
-            color: #fff;
+            color: #ffffff;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             text-decoration: none;
-            font-size: 0.9rem;
-            transition: all 0.2s;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.15s ease;
         }
 
         .btn:hover {
             background-color: var(--primary-hover);
-            transform: translateY(-1px);
         }
 
         .btn-outline {
             background: transparent;
-            color: var(--muted);
-            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border: 1px solid var(--card-border);
         }
 
         .btn-outline:hover {
-            background: #334155;
-            color: var(--text);
+            background: #1f2937;
+            color: var(--text-main);
         }
 
         .btn-sm {
-            padding: 5px 12px;
-            font-size: 0.82rem;
+            padding: 6px 12px;
+            font-size: 0.8rem;
         }
 
-        /* Login Form */
+        /* Login Box */
         .login-box {
-            max-width: 400px;
-            margin: 80px auto;
+            max-width: 380px;
+            margin: 90px auto;
             background: var(--card-bg);
             padding: 32px;
             border-radius: 12px;
-            border: 1px solid var(--border);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--card-border);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         }
 
         .form-group {
-            margin-bottom: 16px;
+            margin-bottom: 18px;
         }
 
         label {
             display: block;
             margin-bottom: 6px;
-            font-size: 0.9rem;
-            color: var(--muted);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 500;
         }
 
         input[type="text"], input[type="password"] {
             width: 100%;
-            padding: 10px 12px;
+            padding: 10px 14px;
             background: var(--bg);
-            border: 1px solid var(--border);
-            color: var(--text);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
             border-radius: 8px;
-            font-size: 0.95rem;
-            direction: ltr;
+            font-size: 0.925rem;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus {
+            border-color: var(--primary);
         }
 
         .error {
-            background: rgba(220, 38, 38, 0.2);
-            border: 1px solid #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
             color: #fca5a5;
             padding: 10px 14px;
             border-radius: 8px;
-            margin-bottom: 16px;
+            margin-bottom: 18px;
             font-size: 0.85rem;
         }
 
-        /* Breadcrumb */
+        /* Navigation Breadcrumb */
         .breadcrumb {
             display: flex;
             gap: 8px;
@@ -177,13 +187,14 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             padding: 12px 20px;
             border-radius: 8px;
             margin-bottom: 20px;
-            font-size: 0.9rem;
-            border: 1px solid var(--border);
+            font-size: 0.875rem;
+            border: 1px solid var(--card-border);
         }
 
         .breadcrumb-item {
-            color: #60a5fa;
+            color: var(--accent-blue);
             cursor: pointer;
+            font-weight: 500;
         }
 
         .breadcrumb-item:hover {
@@ -191,33 +202,34 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         }
 
         .breadcrumb-separator {
-            color: var(--muted);
+            color: var(--text-muted);
         }
 
         .breadcrumb-active {
-            color: var(--muted);
+            color: var(--text-muted);
         }
 
-        /* Layout cards */
+        /* Card Section */
         .card {
             background: var(--card-bg);
             border-radius: 12px;
-            border: 1px solid var(--border);
+            border: 1px solid var(--card-border);
             padding: 24px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
         }
 
         .card-title {
-            font-size: 1.15rem;
+            font-size: 1.1rem;
+            font-weight: 600;
             margin-bottom: 20px;
             padding-bottom: 12px;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--card-border);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
-        /* Lists */
+        /* Item Lists */
         .list-group {
             list-style: none;
         }
@@ -225,70 +237,89 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         .list-item {
             padding: 14px 18px;
             background: var(--bg);
-            border: 1px solid var(--border);
+            border: 1px solid var(--card-border);
             border-radius: 8px;
             margin-bottom: 10px;
             cursor: pointer;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            transition: all 0.2s;
+            transition: all 0.15s ease;
         }
 
         .list-item:hover {
             border-color: var(--primary);
-            background: #1e293b;
+            background: #111827;
         }
 
         .badge {
-            background: #334155;
-            color: var(--muted);
+            background: #1f2937;
+            color: var(--text-muted);
             padding: 3px 10px;
             border-radius: 12px;
-            font-size: 0.8rem;
+            font-size: 0.775rem;
+            font-weight: 500;
         }
 
-        .badge-autofill {
-            background: rgba(245, 158, 11, 0.2);
-            color: var(--autofill-color);
-            border: 1px solid rgba(245, 158, 11, 0.4);
+        /* Field Tabs */
+        .field-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
         }
 
-        .badge-key {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--accent);
-            border: 1px solid rgba(16, 185, 129, 0.4);
+        .field-tab {
+            padding: 8px 16px;
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.85rem;
+            border: 1px solid var(--card-border);
+            transition: all 0.15s ease;
         }
 
-        /* Dark Terminal Style Reconstruction & Keys Display */
+        .field-tab:hover {
+            border-color: var(--primary);
+            color: var(--text-main);
+        }
+
+        .field-tab.active {
+            background: var(--primary);
+            color: #ffffff;
+            border-color: var(--primary);
+        }
+
+        /* Code & Terminal Panels */
         .terminal-box {
-            background: #090d16;
-            border: 1px solid #1e293b;
+            background: var(--code-bg);
+            border: 1px solid var(--card-border);
             border-radius: 10px;
-            padding: 16px 20px;
+            padding: 18px 20px;
             margin-top: 16px;
-            font-family: "Fira Code", Monaco, Consolas, "Courier New", monospace;
-            box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
+            font-family: var(--font-mono);
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
         }
 
         .terminal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: 14px;
             padding-bottom: 8px;
-            border-bottom: 1px solid #1e293b;
-            color: var(--muted);
-            font-size: 0.85rem;
+            border-bottom: 1px solid #1f2937;
+            color: var(--text-muted);
+            font-size: 0.825rem;
         }
 
         .reconstructed-content {
-            color: var(--accent);
+            color: var(--accent-green);
             white-space: pre-wrap;
             word-break: break-all;
             direction: ltr;
             text-align: left;
-            font-size: 0.95rem;
+            font-size: 0.925rem;
             line-height: 1.7;
         }
 
@@ -297,16 +328,17 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         }
 
         .reconstructed-field-tag {
-            color: #60a5fa;
-            font-weight: bold;
+            color: var(--accent-blue);
+            font-weight: 600;
         }
 
         .reconstructed-value {
-            color: #f1f5f9;
-            background: #1e293b;
-            padding: 2px 8px;
+            color: #f3f4f6;
+            background: #111827;
+            padding: 3px 10px;
             border-radius: 4px;
-            margin-left: 6px;
+            margin-left: 8px;
+            border: 1px solid #1f2937;
         }
 
         .keys-grid {
@@ -321,14 +353,14 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            background: #0f172a;
-            border: 1px solid #334155;
+            background: #0b0f19;
+            border: 1px solid #1f2937;
             border-radius: 8px;
             padding: 8px 12px;
-            min-width: 44px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            min-width: 46px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
             transition: transform 0.15s, border-color 0.15s;
-            font-family: monospace;
+            font-family: var(--font-mono);
         }
 
         .key-badge-dark:hover {
@@ -338,65 +370,37 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
 
         .key-badge-dark.is-autofill {
             border-color: rgba(245, 158, 11, 0.5);
-            background: rgba(245, 158, 11, 0.05);
+            background: rgba(245, 158, 11, 0.08);
         }
 
         .key-badge-dark .char {
             font-size: 1.15rem;
-            font-weight: bold;
-            color: var(--text);
+            font-weight: 700;
+            color: var(--text-main);
         }
 
         .key-badge-dark.is-autofill .char {
-            color: var(--autofill-color);
+            color: var(--accent-amber);
         }
 
         .key-badge-dark .meta {
-            font-size: 0.68rem;
-            color: var(--muted);
-            margin-top: 3px;
-        }
-
-        .field-tabs {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-bottom: 16px;
-        }
-
-        .field-tab {
-            padding: 8px 14px;
-            border-radius: 8px;
-            background: var(--bg);
-            color: var(--muted);
-            cursor: pointer;
-            font-size: 0.85rem;
-            border: 1px solid var(--border);
-            transition: all 0.2s;
-        }
-
-        .field-tab:hover {
-            border-color: var(--primary);
-            color: var(--text);
-        }
-
-        .field-tab.active {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
+            font-size: 0.675rem;
+            color: var(--text-muted);
+            margin-top: 4px;
         }
 
         .empty-state {
             text-align: center;
-            color: var(--muted);
-            padding: 30px 0;
+            color: var(--text-muted);
+            padding: 32px 0;
             font-size: 0.9rem;
         }
 
         .loading {
             text-align: center;
-            color: var(--muted);
+            color: var(--text-muted);
             padding: 20px;
+            font-size: 0.9rem;
         }
     </style>
 </head>
@@ -404,95 +408,95 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
 
 <div class="container">
     <header>
-        <h1>داشبورد تحلیل عملکرد تایپیست‌ها</h1>
+        <h1>User Performance</h1>
         <?php if ($isLoggedIn): ?>
-            <a href="dashboard.php?logout=1" class="btn btn-outline btn-sm">خروج از سیستم</a>
+            <a href="dashboard.php?logout=1" class="btn btn-outline btn-sm">Sign Out</a>
         <?php endif; ?>
     </header>
 
     <?php if (!$isLoggedIn): ?>
         <div class="login-box">
-            <h2 style="margin-bottom: 20px; font-size: 1.2rem; text-align: center;">ورود به داشبورد مدیریتی</h2>
+            <h2 style="margin-bottom: 20px; font-size: 1.15rem; text-align: center;">Administrator Sign In</h2>
             <?php if ($errorMsg): ?>
                 <div class="error"><?php echo htmlspecialchars($errorMsg); ?></div>
             <?php endif; ?>
             <form method="POST" action="dashboard.php">
                 <div class="form-group">
-                    <label>نام کاربری:</label>
+                    <label>Username</label>
                     <input type="text" name="username" required autocomplete="off">
                 </div>
                 <div class="form-group">
-                    <label>رمز عبور:</label>
+                    <label>Password</label>
                     <input type="password" name="password" required>
                 </div>
-                <button type="submit" name="login" class="btn" style="width: 100%;">ورود</button>
+                <button type="submit" name="login" class="btn" style="width: 100%;">Sign In</button>
             </form>
         </div>
     <?php else: ?>
 
         <!-- Navigation Breadcrumb -->
         <div class="breadcrumb" id="breadcrumb">
-            <span class="breadcrumb-item" onclick="showLevel(1)">سطح اول: کاربران</span>
+            <span class="breadcrumb-item" onclick="showLevel(1)">Users</span>
         </div>
 
         <div class="grid">
 
-            <!-- Level 1: Users List -->
+            <!-- Section 1: Users -->
             <div class="card" id="level-1-card">
                 <div class="card-title">
-                    <span>سطح اول - لیست کاربران</span>
-                    <button class="btn btn-outline btn-sm" onclick="loadUsers()">بروزرسانی</button>
+                    <span>Users</span>
+                    <button class="btn btn-outline btn-sm" onclick="loadUsers()">Refresh</button>
                 </div>
                 <ul class="list-group" id="users-list">
-                    <li class="loading">در حال بارگذاری لیست کاربران...</li>
+                    <li class="loading">Loading user list...</li>
                 </ul>
             </div>
 
-            <!-- Level 2: User Pages -->
+            <!-- Section 2: User Pages -->
             <div class="card" id="level-2-card" style="display: none;">
                 <div class="card-title">
-                    <span id="level-2-title">سطح دوم - صفحات کاربر</span>
-                    <button class="btn btn-outline btn-sm" onclick="showLevel(1)">بازگشت به کاربران</button>
+                    <span id="level-2-title">Visited Pages</span>
+                    <button class="btn btn-outline btn-sm" onclick="showLevel(1)">Back to Users</button>
                 </div>
                 <ul class="list-group" id="pages-list">
-                    <li class="loading">در حال بارگذاری صفحات...</li>
+                    <li class="loading">Loading pages...</li>
                 </ul>
             </div>
 
-            <!-- Level 3: Fields & Keystrokes -->
+            <!-- Section 3: Input Fields & Keystrokes -->
             <div class="card" id="level-3-card" style="display: none;">
                 <div class="card-title">
-                    <span id="level-3-title">سطح سوم - کلیدهای ثبت‌شده</span>
+                    <span id="level-3-title">Keystrokes & Values</span>
                     <div>
-                        <button class="btn btn-sm" id="btn-show-all-keys" onclick="selectAllFieldsKeys()">نمایش همه کلیدها</button>
-                        <button class="btn btn-outline btn-sm" onclick="showLevel(2)">بازگشت به صفحات</button>
+                        <button class="btn btn-sm" id="btn-show-all-keys" onclick="selectAllFieldsKeys()">Show All Keys</button>
+                        <button class="btn btn-outline btn-sm" onclick="showLevel(2)">Back to Pages</button>
                     </div>
                 </div>
 
                 <div style="margin-bottom: 12px;">
-                    <strong style="font-size: 0.9rem; color: var(--muted);">انتخاب کادر ورودی:</strong>
+                    <strong style="font-size: 0.875rem; color: var(--text-muted);">Select Input Field:</strong>
                 </div>
                 <div class="field-tabs" id="field-tabs">
-                    <!-- Fields dynamically populated -->
+                    <!-- Dynamic tabs -->
                 </div>
 
-                <!-- Text Reconstruction Section -->
+                <!-- Text Reconstruction -->
                 <div class="terminal-box">
                     <div class="terminal-header">
-                        <span>بازسازی دقیق مقادیر کادرها (Text Reconstruction)</span>
-                        <span id="reconstruction-status" class="badge">آماده</span>
+                        <span>Reconstructed Field Values</span>
+                        <span id="reconstruction-status" class="badge">Ready</span>
                     </div>
                     <div class="reconstructed-content" id="text-reconstruction"></div>
                 </div>
 
-                <!-- Exact Keystrokes Visualizer -->
+                <!-- Keystroke Visualizer -->
                 <div class="terminal-box" style="margin-top: 20px;">
                     <div class="terminal-header">
-                        <span>نمایش دقیق کلیدهای فشرده‌شده و پرکننده خودکار (Exact Key Sequence)</span>
-                        <span id="keystroke-count" class="badge">0 کلید</span>
+                        <span>Exact Keystroke Sequence</span>
+                        <span id="keystroke-count" class="badge">0 Keys</span>
                     </div>
                     <div class="keys-grid" id="keys-list">
-                        <div class="empty-state">یک کادر ورودی را انتخاب کنید یا دکمه «نمایش همه کلیدها» را بزنید.</div>
+                        <div class="empty-state">Select an input field or click "Show All Keys".</div>
                     </div>
                 </div>
             </div>
@@ -524,14 +528,14 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             l3.style.display = 'none';
             selectedUserId = null;
             selectedPageUrl = null;
-            bc.innerHTML = `<span class="breadcrumb-item" onclick="showLevel(1)">سطح اول: کاربران</span>`;
+            bc.innerHTML = `<span class="breadcrumb-item" onclick="showLevel(1)">Users</span>`;
         } else if (level === 2) {
             l1.style.display = 'none';
             l2.style.display = 'block';
             l3.style.display = 'none';
             selectedPageUrl = null;
             bc.innerHTML = `
-                <span class="breadcrumb-item" onclick="showLevel(1)">سطح اول: کاربران</span>
+                <span class="breadcrumb-item" onclick="showLevel(1)">Users</span>
                 <span class="breadcrumb-separator">/</span>
                 <span class="breadcrumb-item" onclick="showLevel(2)">user : ${escapeHtml(selectedUserId)}</span>
             `;
@@ -540,7 +544,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             l2.style.display = 'none';
             l3.style.display = 'block';
             bc.innerHTML = `
-                <span class="breadcrumb-item" onclick="showLevel(1)">سطح اول: کاربران</span>
+                <span class="breadcrumb-item" onclick="showLevel(1)">Users</span>
                 <span class="breadcrumb-separator">/</span>
                 <span class="breadcrumb-item" onclick="showLevel(2)">user : ${escapeHtml(selectedUserId)}</span>
                 <span class="breadcrumb-separator">/</span>
@@ -551,82 +555,82 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
 
     function loadUsers() {
         const container = document.getElementById('users-list');
-        container.innerHTML = '<li class="loading">در حال بارگذاری لیست کاربران...</li>';
+        container.innerHTML = '<li class="loading">Loading user list...</li>';
 
         fetch('api.php?action=get_users')
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
                     if (data.users.length === 0) {
-                        container.innerHTML = '<li class="empty-state">هیچ کاربری هنوز ثبت نشده است.</li>';
+                        container.innerHTML = '<li class="empty-state">No users recorded yet.</li>';
                         return;
                     }
                     container.innerHTML = data.users.map(u => `
                         <li class="list-item" onclick="selectUser('${escapeJs(u)}')">
                             <span>user : <strong>${escapeHtml(u)}</strong></span>
-                            <span class="badge">مشاهده فعالیت‌ها &larr;</span>
+                            <span class="badge">View Activity &rarr;</span>
                         </li>
                     `).join('');
                 } else {
-                    container.innerHTML = `<li class="error">خطا: ${escapeHtml(data.message)}</li>`;
+                    container.innerHTML = `<li class="error">Error: ${escapeHtml(data.message)}</li>`;
                 }
             })
             .catch(err => {
-                container.innerHTML = `<li class="error">خطا در دریافت داده‌ها از سرور.</li>`;
+                container.innerHTML = `<li class="error">Error connecting to server.</li>`;
             });
     }
 
     function selectUser(userId) {
         selectedUserId = userId;
-        document.getElementById('level-2-title').innerText = `سطح دوم - صفحات بازدید شده توسط user : ${userId}`;
+        document.getElementById('level-2-title').innerText = `Visited Pages by user : ${userId}`;
         showLevel(2);
         loadPages(userId);
     }
 
     function loadPages(userId) {
         const container = document.getElementById('pages-list');
-        container.innerHTML = '<li class="loading">در حال بارگذاری صفحات...</li>';
+        container.innerHTML = '<li class="loading">Loading pages...</li>';
 
         fetch(`api.php?action=get_pages&user_id=${encodeURIComponent(userId)}`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
                     if (data.pages.length === 0) {
-                        container.innerHTML = '<li class="empty-state">هیچ صفحه‌ای برای این کاربر یافت نشد.</li>';
+                        container.innerHTML = '<li class="empty-state">No pages recorded for this user.</li>';
                         return;
                     }
                     container.innerHTML = data.pages.map(p => `
                         <li class="list-item" onclick="selectPage('${escapeJs(p)}')">
-                            <span style="direction: ltr; text-align: right;">url : <strong>${escapeHtml(p)}</strong></span>
-                            <span class="badge">مشاهده کادرها &larr;</span>
+                            <span>url : <strong>${escapeHtml(p)}</strong></span>
+                            <span class="badge">View Fields &rarr;</span>
                         </li>
                     `).join('');
                 } else {
-                    container.innerHTML = `<li class="error">خطا: ${escapeHtml(data.message)}</li>`;
+                    container.innerHTML = `<li class="error">Error: ${escapeHtml(data.message)}</li>`;
                 }
             })
             .catch(err => {
-                container.innerHTML = `<li class="error">خطا در دریافت داده‌ها از سرور.</li>`;
+                container.innerHTML = `<li class="error">Error connecting to server.</li>`;
             });
     }
 
     function selectPage(pageUrl) {
         selectedPageUrl = pageUrl;
-        document.getElementById('level-3-title').innerText = `سطح سوم - کلیدهای ثبت‌شده در صفحه ${pageUrl}`;
+        document.getElementById('level-3-title').innerText = `Keystrokes & Values on ${pageUrl}`;
         showLevel(3);
         loadFieldsAndKeys(selectedUserId, selectedPageUrl);
     }
 
     function loadFieldsAndKeys(userId, pageUrl) {
         const tabsContainer = document.getElementById('field-tabs');
-        tabsContainer.innerHTML = '<span class="loading">در حال بارگذاری کادرها...</span>';
+        tabsContainer.innerHTML = '<span class="loading">Loading input fields...</span>';
 
         fetch(`api.php?action=get_fields&user_id=${encodeURIComponent(userId)}&page_url=${encodeURIComponent(pageUrl)}`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
                     const fields = data.fields || [];
-                    let html = `<button class="field-tab active" id="tab-all" onclick="selectField('all')">همه کادرها (کل کلیدها)</button>`;
+                    let html = `<button class="field-tab active" id="tab-all" onclick="selectField('all')">All Fields</button>`;
 
                     fields.forEach(f => {
                         const label = f.field_name ? `${f.field_id} (${f.field_name})` : f.field_id;
@@ -636,7 +640,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
                     tabsContainer.innerHTML = html;
                     selectField('all');
                 } else {
-                    tabsContainer.innerHTML = `<span class="error">خطا در بارگذاری کادرها</span>`;
+                    tabsContainer.innerHTML = `<span class="error">Error loading fields</span>`;
                 }
             });
     }
@@ -660,8 +664,8 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         const textPreview = document.getElementById('text-reconstruction');
         const countBadge = document.getElementById('keystroke-count');
 
-        keysContainer.innerHTML = '<div class="loading">در حال دریافت کلیدها...</div>';
-        textPreview.innerHTML = '<span class="loading">در حال پردازش بازسازی متنی...</span>';
+        keysContainer.innerHTML = '<div class="loading">Fetching keystrokes...</div>';
+        textPreview.innerHTML = '<span class="loading">Processing reconstruction...</span>';
 
         let url = `api.php?action=get_keys&user_id=${encodeURIComponent(userId)}&page_url=${encodeURIComponent(pageUrl)}`;
         if (fieldId && fieldId !== 'all') {
@@ -673,11 +677,11 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             .then(data => {
                 if (data.status === 'success') {
                     const keys = data.keys || [];
-                    countBadge.innerText = `${keys.length} کلید`;
+                    countBadge.innerText = `${keys.length} Keys`;
 
                     if (keys.length === 0) {
-                        keysContainer.innerHTML = '<div class="empty-state">هیچ کلیدی ثبت نشده است.</div>';
-                        textPreview.innerText = 'متن ورودی خالی است.';
+                        keysContainer.innerHTML = '<div class="empty-state">No keystrokes recorded.</div>';
+                        textPreview.innerText = 'Input is empty.';
                         return;
                     }
 
@@ -713,7 +717,6 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
                         }
 
                         if (k.key_code === 'Autofill') {
-                            // If first character of an autofill block, reset/overwrite field value cleanly
                             if (!fieldAutofillActive[fId]) {
                                 fieldValues[fId] = '';
                                 fieldAutofillActive[fId] = true;
@@ -737,17 +740,17 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
                     for (const [fId, val] of Object.entries(fieldValues)) {
                         reconstructionHtml += `<div class="reconstructed-field-line">
                             <span class="reconstructed-field-tag">[${escapeHtml(fId)}]:</span>
-                            <span class="reconstructed-value">${escapeHtml(val || '(خالی)')}</span>
+                            <span class="reconstructed-value">${escapeHtml(val || '(empty)')}</span>
                         </div>`;
                     }
 
-                    textPreview.innerHTML = reconstructionHtml || 'متن ورودی خالی است.';
+                    textPreview.innerHTML = reconstructionHtml || 'Input is empty.';
                 } else {
-                    keysContainer.innerHTML = `<div class="error">خطا: ${escapeHtml(data.message)}</div>`;
+                    keysContainer.innerHTML = `<div class="error">Error: ${escapeHtml(data.message)}</div>`;
                 }
             })
             .catch(err => {
-                keysContainer.innerHTML = `<div class="error">خطا در برقراری ارتباط با سرور.</div>`;
+                keysContainer.innerHTML = `<div class="error">Error connecting to server.</div>`;
             });
     }
 
